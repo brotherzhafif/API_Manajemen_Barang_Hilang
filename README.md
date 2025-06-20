@@ -20,13 +20,9 @@ Semua endpoint yang memerlukan autentikasi harus menyertakan header:
 Authorization: Bearer {token}
 ```
 
----
+### Register
 
-## User
-
-### Register User
-
-**Endpoint:** `POST /api/users/register`
+**Endpoint:** `POST /api/register`
 
 **Request Body:**
 
@@ -55,6 +51,38 @@ Authorization: Bearer {token}
   }
 }
 ```
+
+### Login
+
+**Endpoint:** `POST /api/login`
+
+**Request Body:**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "message": "Login berhasil",
+  "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFmODhiODE0MjljYzQ1MWEzMzVjMmY1Y2RiM2RmYTQ5YmY5MWU3N2IiLCJ0eXAiOiJKV1QifQ...",
+  "user": {
+    "id": "uid123456",
+    "email": "user@example.com",
+    "username": "johndoe",
+    "role": "tamu"
+  }
+}
+```
+
+---
+
+## User
 
 ### Get User Profile
 

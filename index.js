@@ -16,6 +16,8 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/laporan', require('./routes/laporan'));
 app.use('/api/cocok', require('./routes/cocok'));
 app.use('/api/klaim', require('./routes/klaim'));
+app.use('/api/register', require('./routes/register'));
+app.use('/api/login', require('./routes/login'));
 
 // Root route
 app.get('/', (req, res) => {
