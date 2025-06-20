@@ -49,43 +49,4 @@ router.patch('/:id/role', verifyToken, checkRole(['admin']), async (req, res) =>
     }
 });
 
-// Register new user
-router.post('/register', async (req, res) => {
-    try {
-        const { email, password, role } = req.body;
-
-        // Validate input
-        if (!email || !password || !role) {
-            return res.status(400).json({ error: 'Semua field harus diisi' });
-        }
-
-        if (!['tamu', 'satpam', 'admin'].includes(role)) {
-            return res.status(400).json({ error: 'Role tidak valid' });
-        }
-
-        // Create user in Firebase Auth
-        const userRecord = await auth.createUser({
-            email,
-            password,
-            disabled: false
-        });
-
-        // Set custom user claims
-        await auth.setCustomUserClaims(userRecord.uid, { role });
-
-        // Create user document in Firestore
-        await db.collection('users').doc(userRecord.uid).set({
-            email,
-            role,
-            created_at: new Date(),
-            updated_at: new Date()
-        });
-
-        res.status(201).json({ message: 'User berhasil terdaftar' });
-    } catch (error) {
-        console.error('Error registering new user:', error);
-        res.status(500).json({ error: 'Gagal mendaftar user baru' });
-    }
-});
-
 module.exports = router;
