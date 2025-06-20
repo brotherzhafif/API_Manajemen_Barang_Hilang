@@ -2,14 +2,14 @@
     "version": 2,
     "builds": [
         {
-            "src": "index.js",
+            "src": "app.js",
             "use": "@vercel/node"
         }
     ],
     "routes": [
         {
             "src": "/(.*)",
-            "dest": "/index.js"
+            "dest": "/app.js"
         }
     ],
     "env": {
@@ -17,7 +17,7 @@
     },
     "crons": [
         {
-            "path": "/api/cron/check-laporan-cocok",
+            "path": "/api/cron/check-laporan",
             "schedule": "0 0 * * *"
         }
     ]

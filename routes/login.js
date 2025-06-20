@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { auth, db } = require('../config/firebase');
+const { signInWithEmailAndPassword } = require('firebase/auth');
+const { auth: clientAuth } = require('../config/firebaseConfig'); // Firebase Client SDK
+const { db, auth: adminAuth } = require('../config/firebase'); // Firebase Admin SDK
 
 // Login user
 router.post('/', async (req, res) => {
@@ -11,45 +13,105 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Email dan password wajib diisi' });
         }
 
-        // Firebase Admin SDK tidak memiliki fungsi signInWithEmailAndPassword,
-        // ini biasanya dilakukan di client dengan Firebase Auth SDK
-        // Namun kita bisa cek apakah user exists dan valid
+        // Login menggunakan Firebase Client SDK (dapat memverifikasi password)
+        const userCredential = await signInWithEmailAndPassword(clientAuth, email, password);
+        const user = userCredential.user;
 
-        try {
-            // Cek apakah user ada
-            const userRecord = await auth.getUserByEmail(email);
+        // Get custom token menggunakan Firebase Admin SDK
+        const customToken = await adminAuth.createCustomToken(user.uid);
 
-            // Disini tidak bisa memverifikasi password secara langsung dengan Admin SDK
-            // Biasanya ini dilakukan di client, tapi kita bisa memberikan informasi user
+        // Get user data from Firestore
+        const userDoc = await db.collection('users').doc(user.uid).get();
 
-            // Get user data from Firestore
-            const userDoc = await db.collection('users').doc(userRecord.uid).get();
-
-            if (!userDoc.exists) {
-                return res.status(404).json({ error: 'User data tidak ditemukan' });
-            }
-
-            // Generate custom token untuk autentikasi client
-            const customToken = await auth.createCustomToken(userRecord.uid);
-
-            res.json({
-                message: 'Login berhasil',
-                token: customToken,
-                user: {
-                    id: userRecord.uid,
-                    email: userRecord.email,
-                    ...userDoc.data()
-                }
-            });
-
-        } catch (error) {
-            // User tidak ditemukan atau ada error lain
-            console.error('Error finding user:', error);
-            return res.status(401).json({ error: 'Email atau password tidak valid' });
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User data tidak ditemukan' });
         }
+
+        // Return user data and token
+        res.json({
+            message: 'Login berhasil',
+            token: customToken,
+            user: {
+                id: user.uid,
+                email: user.email,
+                username: userDoc.data().username,
+                role: userDoc.data().role || 'tamu'
+            }
+        });
     } catch (error) {
         console.error('Error during login:', error);
-        res.status(500).json({ error: 'Gagal melakukan login' });
+        // Pesan error yang lebih detail untuk membantu debugging
+        let errorMessage = 'Email atau password tidak valid';
+
+        if (error.code) {
+            // Firebase auth error codes
+            switch (error.code) {
+                case 'auth/user-not-found':
+                    errorMessage = 'Pengguna dengan email tersebut tidak ditemukan';
+                    break;
+                case 'auth/wrong-password':
+                    errorMessage = 'Password salah';
+                    break;
+                case 'auth/invalid-credential':
+                    errorMessage = 'Kredensial tidak valid';
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage = 'Format email tidak valid';
+                    break;
+                case 'auth/too-many-requests':
+                    errorMessage = 'Terlalu banyak percobaan login yang gagal. Coba lagi nanti';
+                    break;
+            }
+        }
+
+        // Jika dalam mode development, tambahkan detail error
+        if (process.env.NODE_ENV === 'development') {
+            errorMessage += ` (${error.message})`;
+        }
+
+        res.status(401).json({ error: errorMessage });
+    }
+});
+
+// Verify token endpoint
+router.post('/verify', async (req, res) => {
+    try {
+        const { idToken } = req.body;
+
+        if (!idToken) {
+            return res.status(400).json({ error: 'Token wajib dikirimkan' });
+        }
+
+        // Verifikasi token yang dikirimkan oleh client
+        const decodedToken = await auth.verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+
+        // Ambil data user dari Firestore
+        const userDoc = await db.collection('users').doc(uid).get();
+
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User data tidak ditemukan' });
+        }
+
+        res.json({
+            message: 'Token valid',
+            user: {
+                id: uid,
+                email: decodedToken.email,
+                username: userDoc.data().username,
+                role: userDoc.data().role || 'tamu'
+            }
+        });
+    } catch (error) {
+        console.error('Error verifying token:', error);
+        let errorMessage = 'Token tidak valid';
+
+        // Jika dalam mode development, tambahkan detail error
+        if (process.env.NODE_ENV === 'development') {
+            errorMessage += ` (${error.message})`;
+        }
+
+        res.status(401).json({ error: errorMessage });
     }
 });
 

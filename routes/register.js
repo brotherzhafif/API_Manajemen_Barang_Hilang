@@ -48,7 +48,31 @@ router.post('/', upload.single('foto_identitas'), async (req, res) => {
         });
     } catch (error) {
         console.error('Error registering user:', error);
-        res.status(500).json({ error: 'Gagal mendaftarkan user' });
+
+        // Pesan error yang lebih detail untuk membantu debugging
+        let errorMessage = 'Gagal mendaftarkan user';
+
+        if (error.code) {
+            // Firebase auth error codes
+            switch (error.code) {
+                case 'auth/email-already-in-use':
+                    errorMessage = 'Email sudah digunakan oleh pengguna lain';
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage = 'Format email tidak valid';
+                    break;
+                case 'auth/weak-password':
+                    errorMessage = 'Password terlalu lemah, minimal 6 karakter';
+                    break;
+            }
+        }
+
+        // Jika dalam mode development, tambahkan detail error
+        if (process.env.NODE_ENV === 'development') {
+            errorMessage += ` (${error.message})`;
+        }
+
+        res.status(500).json({ error: errorMessage });
     }
 });
 
