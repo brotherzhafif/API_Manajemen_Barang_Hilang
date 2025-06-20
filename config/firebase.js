@@ -17,7 +17,7 @@ try {
             clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
             privateKey: privateKey
         }),
-        storageBucket: `${process.env.FIREBASE_PROJECT_ID}.appspot.com`
+        storageBucket: `${process.env.FIREBASE_PROJECT_ID}.firebasestorage.app`
     });
     console.log('Firebase Admin SDK berhasil diinisialisasi');
 } catch (error) {
