@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const { verifyToken, checkRole } = require('../middleware/auth');
 const { upload, uploadFileToStorage } = require('../middleware/upload');
+const { v4: uuidv4 } = require('uuid');
 
 // Buat klaim baru
 router.post('/', verifyToken, checkRole(['satpam']), upload.single('foto_klaim'), async (req, res) => {
@@ -20,7 +21,9 @@ router.post('/', verifyToken, checkRole(['satpam']), upload.single('foto_klaim')
         }
 
         // Simpan klaim ke Firestore
-        const docRef = await db.collection('klaim').add({
+        const id_klaim = `klaim-${uuidv4().substring(0, 8)}`;
+
+        await db.collection('klaim').doc(id_klaim).set({
             id_laporan_cocok,
             id_satpam: req.user.uid,
             id_penerima,
@@ -30,7 +33,7 @@ router.post('/', verifyToken, checkRole(['satpam']), upload.single('foto_klaim')
         });
 
         res.status(201).json({
-            id_klaim: docRef.id,
+            id_klaim,
             message: 'Klaim berhasil dibuat'
         });
     } catch (error) {

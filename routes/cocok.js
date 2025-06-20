@@ -2,88 +2,162 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../config/firebase');
 const { verifyToken, checkRole } = require('../middleware/auth');
-const { upload, uploadFileToStorage } = require('../middleware/upload');
+const { v4: uuidv4 } = require('uuid');
 
-// Buat klaim baru
-router.post('/', verifyToken, checkRole(['satpam']), upload.single('foto_klaim'), async (req, res) => {
+// Get all cocok data
+router.get('/', async (req, res) => {
     try {
-        const { id_laporan_cocok, id_penerima } = req.body;
+        const snapshot = await db.collection('cocok').get();
+        const cocokData = [];
 
-        if (!id_laporan_cocok || !id_penerima) {
-            return res.status(400).json({ error: 'id_laporan_cocok dan id_penerima wajib diisi' });
-        }
-
-        // Upload foto klaim
-        let url_foto_klaim = null;
-        if (req.file) {
-            url_foto_klaim = await uploadFileToStorage(req.file, 'klaim');
-        }
-
-        // Simpan klaim ke Firestore
-        const docRef = await db.collection('klaim').add({
-            id_laporan_cocok,
-            id_satpam: req.user.uid,
-            id_penerima,
-            url_foto_klaim,
-            waktu_terima: new Date(),
-            terverifikasi: false
+        snapshot.forEach(doc => {
+            cocokData.push({
+                id_laporan_cocok: doc.id,
+                ...doc.data()
+            });
         });
 
-        res.status(201).json({
-            id_klaim: docRef.id,
-            message: 'Klaim berhasil dibuat'
-        });
+        res.json(cocokData);
     } catch (error) {
-        console.error('Error creating klaim:', error);
-        res.status(500).json({ error: 'Gagal membuat klaim' });
+        console.error('Error getting cocok data:', error);
+        res.status(500).json({ error: 'Gagal mengambil data pencocokan' });
     }
 });
 
-// Verifikasi klaim (satpam only)
-router.patch('/:id/verifikasi', verifyToken, checkRole(['satpam']), async (req, res) => {
+// Get specific cocok by ID
+router.get('/:id', async (req, res) => {
     try {
-        const klaimDoc = await db.collection('klaim').doc(req.params.id).get();
+        const cocokDoc = await db.collection('cocok').doc(req.params.id).get();
 
-        if (!klaimDoc.exists) {
-            return res.status(404).json({ error: 'Klaim tidak ditemukan' });
+        if (!cocokDoc.exists) {
+            return res.status(404).json({ error: 'Data pencocokan tidak ditemukan' });
         }
 
-        const klaimData = klaimDoc.data();
+        res.json({
+            id_laporan_cocok: cocokDoc.id,
+            ...cocokDoc.data()
+        });
+    } catch (error) {
+        console.error('Error getting cocok data:', error);
+        res.status(500).json({ error: 'Gagal mengambil data pencocokan' });
+    }
+});
 
-        // Hanya satpam yang membuat klaim yang bisa memverifikasi
-        if (klaimData.id_satpam !== req.user.uid) {
-            return res.status(403).json({ error: 'Anda tidak memiliki akses untuk memverifikasi klaim ini' });
+// Create new cocok (admin/satpam only)
+router.post('/', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
+    try {
+        const { id_laporan_hilang, id_laporan_temuan, skor_cocok } = req.body;
+
+        if (!id_laporan_hilang || !id_laporan_temuan) {
+            return res.status(400).json({ error: 'ID laporan hilang dan temuan wajib diisi' });
         }
 
-        await db.collection('klaim').doc(req.params.id).update({
-            terverifikasi: true,
+        // Validate laporan exists
+        const laporanHilangDoc = await db.collection('laporan').doc(id_laporan_hilang).get();
+        const laporanTemuanDoc = await db.collection('laporan').doc(id_laporan_temuan).get();
+
+        if (!laporanHilangDoc.exists || !laporanTemuanDoc.exists) {
+            return res.status(404).json({ error: 'Laporan hilang atau temuan tidak ditemukan' });
+        }
+
+        const laporanHilangData = laporanHilangDoc.data();
+        const laporanTemuanData = laporanTemuanDoc.data();
+
+        // Verify laporan types
+        if (laporanHilangData.jenis_laporan !== 'hilang' || laporanTemuanData.jenis_laporan !== 'temuan') {
+            return res.status(400).json({ error: 'Jenis laporan tidak sesuai' });
+        }
+
+        // Create new cocok record with custom ID
+        const id_laporan_cocok = `cocok-${uuidv4().substring(0, 8)}`;
+
+        const newCocok = {
+            id_laporan_hilang,
+            id_laporan_temuan,
+            skor_cocok: skor_cocok || 0,
+            created_at: new Date(),
+            created_by: req.user.uid
+        };
+
+        await db.collection('cocok').doc(id_laporan_cocok).set(newCocok);
+
+        // Update status laporan to 'cocok'
+        await db.collection('laporan').doc(id_laporan_hilang).update({
+            status: 'cocok',
             updated_at: new Date()
         });
 
-        // Update status laporan menjadi selesai
-        if (klaimData.id_laporan_cocok) {
-            const cocokDoc = await db.collection('cocok').doc(klaimData.id_laporan_cocok).get();
+        await db.collection('laporan').doc(id_laporan_temuan).update({
+            status: 'cocok',
+            updated_at: new Date()
+        });
 
-            if (cocokDoc.exists) {
-                const cocokData = cocokDoc.data();
+        res.status(201).json({
+            id_laporan_cocok,
+            ...newCocok,
+            message: 'Pencocokan berhasil dibuat'
+        });
+    } catch (error) {
+        console.error('Error creating cocok data:', error);
+        res.status(500).json({ error: 'Gagal membuat data pencocokan' });
+    }
+});
 
-                // Update status laporan hilang dan temuan
-                await db.collection('laporan').doc(cocokData.id_laporan_hilang).update({
-                    status: 'selesai',
-                    updated_at: new Date()
-                });
+// Update skor cocok
+router.patch('/:id/skor', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
+    try {
+        const { skor_cocok } = req.body;
 
-                await db.collection('laporan').doc(cocokData.id_laporan_temuan).update({
-                    status: 'selesai',
-                    updated_at: new Date()
-                });
-            }
+        if (skor_cocok === undefined || skor_cocok < 0 || skor_cocok > 100) {
+            return res.status(400).json({ error: 'Skor harus bernilai 0-100' });
         }
 
-        res.json({ message: 'Klaim berhasil diverifikasi' });
+        await db.collection('cocok').doc(req.params.id).update({
+            skor_cocok,
+            updated_at: new Date(),
+            updated_by: req.user.uid
+        });
+
+        res.json({ message: 'Skor kecocokan berhasil diupdate' });
     } catch (error) {
-        console.error('Error verifying klaim:', error);
-        res.status(500).json({ error: 'Gagal memverifikasi klaim' });
+        console.error('Error updating cocok score:', error);
+        res.status(500).json({ error: 'Gagal mengupdate skor kecocokan' });
+    }
+});
+
+// Delete cocok (admin only)
+router.delete('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
+    try {
+        const cocokDoc = await db.collection('cocok').doc(req.params.id).get();
+
+        if (!cocokDoc.exists) {
+            return res.status(404).json({ error: 'Data pencocokan tidak ditemukan' });
+        }
+
+        const cocokData = cocokDoc.data();
+
+        // Reset laporan status to 'proses'
+        if (cocokData.id_laporan_hilang) {
+            await db.collection('laporan').doc(cocokData.id_laporan_hilang).update({
+                status: 'proses',
+                updated_at: new Date()
+            });
+        }
+
+        if (cocokData.id_laporan_temuan) {
+            await db.collection('laporan').doc(cocokData.id_laporan_temuan).update({
+                status: 'proses',
+                updated_at: new Date()
+            });
+        }
+
+        // Delete cocok record
+        await db.collection('cocok').doc(req.params.id).delete();
+
+        res.json({ message: 'Data pencocokan berhasil dihapus' });
+    } catch (error) {
+        console.error('Error deleting cocok data:', error);
+        res.status(500).json({ error: 'Gagal menghapus data pencocokan' });
     }
 });
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../config/firebase');
 const { verifyToken, checkRole } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 
 // Get all kategori
 router.get('/', async (req, res) => {
@@ -26,19 +27,19 @@ router.get('/', async (req, res) => {
 // Add new kategori (admin only)
 router.post('/', verifyToken, checkRole(['admin']), async (req, res) => {
     try {
-        const { nama_kategori } = req.body;
-
-        if (!nama_kategori) {
+        const { nama_kategori } = req.body; if (!nama_kategori) {
             return res.status(400).json({ error: 'nama_kategori wajib diisi' });
         }
 
-        const docRef = await db.collection('kategori').add({
+        const id_kategori = `kat-${uuidv4().substring(0, 8)}`;
+
+        await db.collection('kategori').doc(id_kategori).set({
             nama_kategori,
             created_at: new Date()
         });
 
         res.status(201).json({
-            id_kategori: docRef.id,
+            id_kategori,
             nama_kategori
         });
     } catch (error) {

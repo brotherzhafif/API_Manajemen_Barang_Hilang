@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const { verifyToken } = require('../middleware/auth');
 const { upload, uploadFileToStorage } = require('../middleware/upload');
+const { v4: uuidv4 } = require('uuid');
 
 // Buat laporan baru
 router.post('/', verifyToken, upload.array('foto', 3), async (req, res) => {
@@ -30,7 +31,9 @@ router.post('/', verifyToken, upload.array('foto', 3), async (req, res) => {
         }
 
         // Simpan laporan ke Firestore
-        const docRef = await db.collection('laporan').add({
+        const id_laporan = `lap-${uuidv4().substring(0, 8)}`;
+
+        await db.collection('laporan').doc(id_laporan).set({
             id_kategori,
             id_user: req.user.uid,
             id_lokasi_klaim,
@@ -44,7 +47,7 @@ router.post('/', verifyToken, upload.array('foto', 3), async (req, res) => {
         });
 
         res.status(201).json({
-            id_laporan: docRef.id,
+            id_laporan,
             message: 'Laporan berhasil dibuat'
         });
     } catch (error) {

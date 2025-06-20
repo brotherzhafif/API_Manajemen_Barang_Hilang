@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../config/firebase');
 const { verifyToken, checkRole } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 
 // Get all lokasi
 router.get('/', async (req, res) => {
@@ -54,20 +55,20 @@ router.post('/', verifyToken, checkRole(['admin', 'satpam']), async (req, res) =
         // Check if lokasi already exists
         const lokasiSnapshot = await db.collection('lokasi')
             .where('lokasi_klaim', '==', lokasi_klaim)
-            .get();
+            .get(); if (!lokasiSnapshot.empty) {
+                return res.status(400).json({ error: 'Lokasi dengan nama tersebut sudah ada' });
+            }
 
-        if (!lokasiSnapshot.empty) {
-            return res.status(400).json({ error: 'Lokasi dengan nama tersebut sudah ada' });
-        }
+        const id_lokasi_klaim = `loc-${uuidv4().substring(0, 8)}`;
 
-        const docRef = await db.collection('lokasi').add({
+        await db.collection('lokasi').doc(id_lokasi_klaim).set({
             lokasi_klaim,
             created_at: new Date(),
             created_by: req.user.uid
         });
 
         res.status(201).json({
-            id_lokasi_klaim: docRef.id,
+            id_lokasi_klaim,
             lokasi_klaim
         });
     } catch (error) {
