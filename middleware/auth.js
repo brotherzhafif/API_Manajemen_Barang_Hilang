@@ -1,5 +1,5 @@
 const express = require('express');
-const { auth } = require('../config/firebase');
+const { auth, db } = require('../config/firebase');
 
 // Middleware verifikasi token
 const verifyToken = async (req, res, next) => {
@@ -32,22 +32,26 @@ const verifyToken = async (req, res, next) => {
     }
 };
 
-// Middleware pengecekan role
+// Middleware pengecekan role dari Firestore
 const checkRole = (roles) => {
-    return (req, res, next) => {
+    return async (req, res, next) => {
         try {
             if (!req.user) {
                 return res.status(401).json({ error: 'Unauthorized - User belum terautentikasi' });
             }
-
-            if (!roles.includes(req.user.role)) {
+            // Ambil role dari Firestore
+            const userDoc = await db.collection('users').doc(req.user.uid).get();
+            if (!userDoc.exists) {
+                return res.status(404).json({ error: 'User tidak ditemukan di database' });
+            }
+            const userRole = userDoc.data().role;
+            if (!roles.includes(userRole)) {
                 return res.status(403).json({
                     error: 'Forbidden - Anda tidak memiliki akses',
                     requiredRoles: roles,
-                    yourRole: req.user.role
+                    yourRole: userRole
                 });
             }
-
             next();
         } catch (error) {
             console.error('Error dalam middleware checkRole:', error);
