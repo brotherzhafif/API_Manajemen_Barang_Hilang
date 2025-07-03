@@ -5,8 +5,28 @@ const { verifyToken, checkRole } = require('../middleware/auth');
 const { upload, uploadFileToStorage } = require('../middleware/upload');
 const { v4: uuidv4 } = require('uuid');
 
-// Buat klaim baru
-router.post('/', verifyToken, checkRole(['satpam']), upload.single('foto_klaim'), async (req, res) => {
+// Get all klaim (admin only)
+router.get('/', verifyToken, async (req, res) => {
+    try {
+        const snapshot = await db.collection('klaim').get();
+        const klaimData = [];
+
+        snapshot.forEach(doc => {
+            klaimData.push({
+                id_klaim: doc.id,
+                ...doc.data()
+            });
+        });
+
+        res.json(klaimData);
+    } catch (error) {
+        console.error('Error getting all klaim:', error);
+        res.status(500).json({ error: 'Gagal mengambil data semua klaim' });
+    }
+});
+
+// Buat klaim baru (untuk backward compatibility)
+router.post('/', verifyToken, checkRole(['admin', 'satpam']), upload.single('foto_klaim'), async (req, res) => {
     try {
         const { id_laporan_cocok, id_penerima } = req.body;
 
@@ -29,7 +49,6 @@ router.post('/', verifyToken, checkRole(['satpam']), upload.single('foto_klaim')
             id_penerima,
             url_foto_klaim,
             waktu_terima: new Date(),
-            terverifikasi: false
         });
 
         res.status(201).json({
@@ -42,8 +61,8 @@ router.post('/', verifyToken, checkRole(['satpam']), upload.single('foto_klaim')
     }
 });
 
-// Verifikasi klaim (satpam only)
-router.patch('/:id/verifikasi', verifyToken, checkRole(['satpam']), async (req, res) => {
+// Get specific klaim by ID (admin only)
+router.get('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
     try {
         const klaimDoc = await db.collection('klaim').doc(req.params.id).get();
 
@@ -51,42 +70,91 @@ router.patch('/:id/verifikasi', verifyToken, checkRole(['satpam']), async (req, 
             return res.status(404).json({ error: 'Klaim tidak ditemukan' });
         }
 
-        const klaimData = klaimDoc.data();
+        res.json({
+            id_klaim: klaimDoc.id,
+            ...klaimDoc.data()
+        });
+    } catch (error) {
+        console.error('Error getting klaim:', error);
+        res.status(500).json({ error: 'Gagal mengambil data klaim' });
+    }
+});
 
-        // Hanya satpam yang membuat klaim yang bisa memverifikasi
-        if (klaimData.id_satpam !== req.user.uid) {
-            return res.status(403).json({ error: 'Anda tidak memiliki akses untuk memverifikasi klaim ini' });
+// Update klaim
+router.put('/:id', verifyToken, checkRole(['admin', 'satpam']), upload.single('foto_klaim'), async (req, res) => {
+    try {
+        const { id_laporan_cocok, id_penerima, id_satpam, terverifikasi } = req.body;
+
+        // Check if klaim exists
+        const klaimDoc = await db.collection('klaim').doc(req.params.id).get();
+        if (!klaimDoc.exists) {
+            return res.status(404).json({ error: 'Klaim tidak ditemukan' });
         }
 
-        await db.collection('klaim').doc(req.params.id).update({
-            terverifikasi: true,
-            updated_at: new Date()
-        });
+        const currentData = klaimDoc.data();
 
-        // Update status laporan menjadi selesai
-        if (klaimData.id_laporan_cocok) {
-            const cocokDoc = await db.collection('cocok').doc(klaimData.id_laporan_cocok).get();
+        // Upload foto klaim baru jika ada
+        let url_foto_klaim = currentData.url_foto_klaim;
+        if (req.file) {
+            url_foto_klaim = await uploadFileToStorage(req.file, 'klaim');
+        }
 
-            if (cocokDoc.exists) {
-                const cocokData = cocokDoc.data();
+        const updateData = {
+            id_laporan_cocok: id_laporan_cocok || currentData.id_laporan_cocok,
+            id_penerima: id_penerima || currentData.id_penerima,
+            id_satpam: id_satpam || currentData.id_satpam,
+            url_foto_klaim,
+            terverifikasi: terverifikasi !== undefined ? terverifikasi : currentData.terverifikasi,
+            updated_at: new Date(),
+            updated_by: req.user.uid
+        };
 
-                // Update status laporan hilang dan temuan
-                await db.collection('laporan').doc(cocokData.id_laporan_hilang).update({
-                    status: 'selesai',
-                    updated_at: new Date()
-                });
+        await db.collection('klaim').doc(req.params.id).update(updateData);
 
-                await db.collection('laporan').doc(cocokData.id_laporan_temuan).update({
-                    status: 'selesai',
-                    updated_at: new Date()
-                });
+        // If verifying the claim, update related laporan status
+        if (terverifikasi === true && !currentData.terverifikasi) {
+            if (updateData.id_laporan_cocok) {
+                const cocokDoc = await db.collection('cocok').doc(updateData.id_laporan_cocok).get();
+                if (cocokDoc.exists) {
+                    const cocokData = cocokDoc.data();
+                    // Update status laporan hilang dan temuan
+                    await db.collection('laporan').doc(cocokData.id_laporan_hilang).update({
+                        status: 'selesai',
+                        updated_at: new Date()
+                    });
+                    await db.collection('laporan').doc(cocokData.id_laporan_temuan).update({
+                        status: 'selesai',
+                        updated_at: new Date()
+                    });
+                }
             }
         }
 
-        res.json({ message: 'Klaim berhasil diverifikasi' });
+        res.json({
+            message: 'Klaim berhasil diupdate',
+            id_klaim: req.params.id
+        });
     } catch (error) {
-        console.error('Error verifying klaim:', error);
-        res.status(500).json({ error: 'Gagal memverifikasi klaim' });
+        console.error('Error updating klaim:', error);
+        res.status(500).json({ error: 'Gagal mengupdate klaim' });
+    }
+});
+
+// Delete klaim
+router.delete('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
+    try {
+        const klaimDoc = await db.collection('klaim').doc(req.params.id).get();
+
+        if (!klaimDoc.exists) {
+            return res.status(404).json({ error: 'Klaim tidak ditemukan' });
+        }
+
+        await db.collection('klaim').doc(req.params.id).delete();
+
+        res.json({ message: 'Klaim berhasil dihapus' });
+    } catch (error) {
+        console.error('Error deleting klaim:', error);
+        res.status(500).json({ error: 'Gagal menghapus klaim' });
     }
 });
 

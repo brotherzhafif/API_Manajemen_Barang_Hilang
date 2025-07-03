@@ -24,8 +24,27 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get specific kategori by ID
+router.get('/:id', async (req, res) => {
+    try {
+        const kategoriDoc = await db.collection('kategori').doc(req.params.id).get();
+
+        if (!kategoriDoc.exists) {
+            return res.status(404).json({ error: 'Kategori tidak ditemukan' });
+        }
+
+        res.json({
+            id_kategori: kategoriDoc.id,
+            ...kategoriDoc.data()
+        });
+    } catch (error) {
+        console.error('Error getting kategori:', error);
+        res.status(500).json({ error: 'Gagal mengambil data kategori' });
+    }
+});
+
 // Add new kategori (admin only)
-router.post('/', verifyToken, checkRole(['admin']), async (req, res) => {
+router.post('/', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
     try {
         const { nama_kategori } = req.body; if (!nama_kategori) {
             return res.status(400).json({ error: 'nama_kategori wajib diisi' });
@@ -48,8 +67,41 @@ router.post('/', verifyToken, checkRole(['admin']), async (req, res) => {
     }
 });
 
+// Update kategori (admin only)
+router.put('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
+    try {
+        const { nama_kategori } = req.body;
+
+        if (!nama_kategori) {
+            return res.status(400).json({ error: 'nama_kategori wajib diisi' });
+        }
+
+        // Check if kategori exists
+        const kategoriDoc = await db.collection('kategori').doc(req.params.id).get();
+
+        if (!kategoriDoc.exists) {
+            return res.status(404).json({ error: 'Kategori tidak ditemukan' });
+        }
+
+        await db.collection('kategori').doc(req.params.id).update({
+            nama_kategori,
+            updated_at: new Date(),
+            updated_by: req.user.uid
+        });
+
+        res.json({
+            id_kategori: req.params.id,
+            nama_kategori,
+            message: 'Kategori berhasil diupdate'
+        });
+    } catch (error) {
+        console.error('Error updating kategori:', error);
+        res.status(500).json({ error: 'Gagal mengupdate kategori' });
+    }
+});
+
 // Delete kategori (admin only)
-router.delete('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
+router.delete('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
     try {
         await db.collection('kategori').doc(req.params.id).delete();
         res.json({ message: 'Kategori berhasil dihapus' });

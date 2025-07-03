@@ -103,6 +103,62 @@ router.post('/', verifyToken, checkRole(['admin', 'satpam']), async (req, res) =
     }
 });
 
+// Update cocok data (admin only)
+router.put('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
+    try {
+        const { id_laporan_hilang, id_laporan_temuan, skor_cocok } = req.body;
+
+        // Check if cocok exists
+        const cocokDoc = await db.collection('cocok').doc(req.params.id).get();
+        if (!cocokDoc.exists) {
+            return res.status(404).json({ error: 'Data pencocokan tidak ditemukan' });
+        }
+
+        const currentData = cocokDoc.data();
+
+        // Validate laporan if provided
+        if (id_laporan_hilang) {
+            const laporanHilangDoc = await db.collection('laporan').doc(id_laporan_hilang).get();
+            if (!laporanHilangDoc.exists) {
+                return res.status(404).json({ error: 'Laporan hilang tidak ditemukan' });
+            }
+            const laporanHilangData = laporanHilangDoc.data();
+            if (laporanHilangData.jenis_laporan !== 'hilang') {
+                return res.status(400).json({ error: 'Jenis laporan hilang tidak sesuai' });
+            }
+        }
+
+        if (id_laporan_temuan) {
+            const laporanTemuanDoc = await db.collection('laporan').doc(id_laporan_temuan).get();
+            if (!laporanTemuanDoc.exists) {
+                return res.status(404).json({ error: 'Laporan temuan tidak ditemukan' });
+            }
+            const laporanTemuanData = laporanTemuanDoc.data();
+            if (laporanTemuanData.jenis_laporan !== 'temuan') {
+                return res.status(400).json({ error: 'Jenis laporan temuan tidak sesuai' });
+            }
+        }
+
+        const updateData = {
+            id_laporan_hilang: id_laporan_hilang || currentData.id_laporan_hilang,
+            id_laporan_temuan: id_laporan_temuan || currentData.id_laporan_temuan,
+            skor_cocok: skor_cocok !== undefined ? skor_cocok : currentData.skor_cocok,
+            updated_at: new Date(),
+            updated_by: req.user.uid
+        };
+
+        await db.collection('cocok').doc(req.params.id).update(updateData);
+
+        res.json({
+            message: 'Data pencocokan berhasil diupdate',
+            id_laporan_cocok: req.params.id
+        });
+    } catch (error) {
+        console.error('Error updating cocok data:', error);
+        res.status(500).json({ error: 'Gagal mengupdate data pencocokan' });
+    }
+});
+
 // Update skor cocok
 router.patch('/:id/skor', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
     try {
@@ -126,7 +182,7 @@ router.patch('/:id/skor', verifyToken, checkRole(['admin', 'satpam']), async (re
 });
 
 // Delete cocok (admin only)
-router.delete('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
+router.delete('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
     try {
         const cocokDoc = await db.collection('cocok').doc(req.params.id).get();
 
