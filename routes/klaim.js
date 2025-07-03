@@ -49,11 +49,27 @@ router.post('/', verifyToken, checkRole(['admin', 'satpam']), upload.single('fot
             id_penerima,
             url_foto_klaim,
             waktu_terima: new Date(),
+            status: 'selesai'
         });
+
+        // Otomatis update status laporan terkait menjadi selesai
+        const cocokDoc = await db.collection('cocok').doc(id_laporan_cocok).get();
+        if (cocokDoc.exists) {
+            const cocokData = cocokDoc.data();
+            // Update status laporan hilang dan temuan
+            await db.collection('laporan').doc(cocokData.id_laporan_hilang).update({
+                status: 'selesai',
+                updated_at: new Date()
+            });
+            await db.collection('laporan').doc(cocokData.id_laporan_temuan).update({
+                status: 'selesai',
+                updated_at: new Date()
+            });
+        }
 
         res.status(201).json({
             id_klaim,
-            message: 'Klaim berhasil dibuat'
+            message: 'Klaim berhasil dibuat dan diselesaikan'
         });
     } catch (error) {
         console.error('Error creating klaim:', error);
@@ -83,7 +99,7 @@ router.get('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res)
 // Update klaim
 router.put('/:id', verifyToken, checkRole(['admin', 'satpam']), upload.single('foto_klaim'), async (req, res) => {
     try {
-        const { id_laporan_cocok, id_penerima, id_satpam, terverifikasi } = req.body;
+        const { id_laporan_cocok, id_penerima, id_satpam } = req.body;
 
         // Check if klaim exists
         const klaimDoc = await db.collection('klaim').doc(req.params.id).get();
@@ -104,31 +120,11 @@ router.put('/:id', verifyToken, checkRole(['admin', 'satpam']), upload.single('f
             id_penerima: id_penerima || currentData.id_penerima,
             id_satpam: id_satpam || currentData.id_satpam,
             url_foto_klaim,
-            terverifikasi: terverifikasi !== undefined ? terverifikasi : currentData.terverifikasi,
             updated_at: new Date(),
             updated_by: req.user.uid
         };
 
         await db.collection('klaim').doc(req.params.id).update(updateData);
-
-        // If verifying the claim, update related laporan status
-        if (terverifikasi === true && !currentData.terverifikasi) {
-            if (updateData.id_laporan_cocok) {
-                const cocokDoc = await db.collection('cocok').doc(updateData.id_laporan_cocok).get();
-                if (cocokDoc.exists) {
-                    const cocokData = cocokDoc.data();
-                    // Update status laporan hilang dan temuan
-                    await db.collection('laporan').doc(cocokData.id_laporan_hilang).update({
-                        status: 'selesai',
-                        updated_at: new Date()
-                    });
-                    await db.collection('laporan').doc(cocokData.id_laporan_temuan).update({
-                        status: 'selesai',
-                        updated_at: new Date()
-                    });
-                }
-            }
-        }
 
         res.json({
             message: 'Klaim berhasil diupdate',

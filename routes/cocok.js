@@ -159,28 +159,6 @@ router.put('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res)
     }
 });
 
-// Update skor cocok
-router.patch('/:id/skor', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
-    try {
-        const { skor_cocok } = req.body;
-
-        if (skor_cocok === undefined || skor_cocok < 0 || skor_cocok > 100) {
-            return res.status(400).json({ error: 'Skor harus bernilai 0-100' });
-        }
-
-        await db.collection('cocok').doc(req.params.id).update({
-            skor_cocok,
-            updated_at: new Date(),
-            updated_by: req.user.uid
-        });
-
-        res.json({ message: 'Skor kecocokan berhasil diupdate' });
-    } catch (error) {
-        console.error('Error updating cocok score:', error);
-        res.status(500).json({ error: 'Gagal mengupdate skor kecocokan' });
-    }
-});
-
 // Delete cocok (admin only)
 router.delete('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
     try {

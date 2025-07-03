@@ -2,13 +2,14 @@
 
 ## Daftar Isi
 
-- Autentikasi
-- User
-- Kategori
-- Lokasi
-- Laporan
-- Cocok
-- Klaim
+- [Autentikasi](#autentikasi)
+- [User Management](#user-management)
+- [Kategori](#kategori)
+- [Lokasi](#lokasi)
+- [Laporan](#laporan)
+- [Cocok (Pencocokan)](#cocok-pencocokan)
+- [Klaim](#klaim)
+- [Role & Permission](#role--permission)
 
 ---
 
@@ -82,7 +83,28 @@ Authorization: Bearer {token}
 
 ---
 
-## User
+## User Management
+
+### Get All Users
+
+**Endpoint:** `GET /api/users`
+
+**Headers:** Memerlukan token autentikasi
+
+**Response (200):**
+
+```json
+[
+  {
+    "id": "uid123456",
+    "username": "johndoe",
+    "email": "user@example.com",
+    "url_foto_identitas": "https://storage.googleapis.com/...",
+    "role": "tamu",
+    "created_at": "2023-06-21T14:30:00.000Z"
+  }
+]
+```
 
 ### Get User Profile
 
@@ -103,9 +125,28 @@ Authorization: Bearer {token}
 }
 ```
 
-### Update User Role
+### Get Specific User by ID
 
-**Endpoint:** `PATCH /api/users/{userId}/role`
+**Endpoint:** `GET /api/users/{userId}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin
+
+**Response (200):**
+
+```json
+{
+  "id": "uid123456",
+  "username": "johndoe",
+  "email": "user@example.com",
+  "url_foto_identitas": "https://storage.googleapis.com/...",
+  "role": "tamu",
+  "created_at": "2023-06-21T14:30:00.000Z"
+}
+```
+
+### Create New User
+
+**Endpoint:** `POST /api/users`
 
 **Headers:** Memerlukan token autentikasi dengan role admin
 
@@ -113,15 +154,76 @@ Authorization: Bearer {token}
 
 ```json
 {
+  "email": "newuser@example.com",
+  "password": "password123",
+  "username": "newuser",
   "role": "satpam"
 }
 ```
+
+**Form Data:**
+
+- `foto_identitas` (file, opsional): Foto identitas pengguna
+
+**Response (201):**
+
+```json
+{
+  "message": "User berhasil dibuat",
+  "user": {
+    "id": "uid789012",
+    "username": "newuser",
+    "email": "newuser@example.com",
+    "role": "satpam"
+  }
+}
+```
+
+### Update User
+
+**Endpoint:** `PUT /api/users/{userId}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin
+
+**Request Body:**
+
+```json
+{
+  "username": "updated_username",
+  "email": "updated@example.com",
+  "role": "admin"
+}
+```
+
+**Form Data:**
+
+- `foto_identitas` (file, opsional): Foto identitas pengguna baru
 
 **Response (200):**
 
 ```json
 {
-  "message": "Role user berhasil diupdate"
+  "message": "User berhasil diupdate",
+  "user": {
+    "id": "uid123456",
+    "username": "updated_username",
+    "email": "updated@example.com",
+    "role": "admin"
+  }
+}
+```
+
+### Delete User
+
+**Endpoint:** `DELETE /api/users/{userId}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin
+
+**Response (200):**
+
+```json
+{
+  "message": "User berhasil dihapus"
 }
 ```
 
@@ -150,11 +252,25 @@ Authorization: Bearer {token}
 ]
 ```
 
+### Get Kategori by ID
+
+**Endpoint:** `GET /api/kategori/{id_kategori}`
+
+**Response (200):**
+
+```json
+{
+  "id_kategori": "kat-a1b2c3d4",
+  "nama_kategori": "Elektronik",
+  "created_at": "2023-06-21T14:30:00.000Z"
+}
+```
+
 ### Add Kategori
 
 **Endpoint:** `POST /api/kategori`
 
-**Headers:** Memerlukan token autentikasi dengan role admin
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
 
 **Request Body:**
 
@@ -173,11 +289,35 @@ Authorization: Bearer {token}
 }
 ```
 
+### Update Kategori
+
+**Endpoint:** `PUT /api/kategori/{id_kategori}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
+
+**Request Body:**
+
+```json
+{
+  "nama_kategori": "Aksesoris Updated"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "id_kategori": "kat-a1b2c3d4",
+  "nama_kategori": "Aksesoris Updated",
+  "message": "Kategori berhasil diupdate"
+}
+```
+
 ### Delete Kategori
 
 **Endpoint:** `DELETE /api/kategori/{id_kategori}`
 
-**Headers:** Memerlukan token autentikasi dengan role admin
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
 
 **Response (200):**
 
@@ -371,15 +511,6 @@ Authorization: Bearer {token}
     "jenis_laporan": "hilang",
     "status": "proses",
     "waktu_laporan": "2023-06-21T14:30:00.000Z"
-  },
-  {
-    "id_laporan": "lap-b9c8d7e6",
-    "id_kategori": "kat-a1b2c3d4",
-    "id_user": "uid789012",
-    "nama_barang": "KTP",
-    "jenis_laporan": "temuan",
-    "status": "proses",
-    "waktu_laporan": "2023-06-21T15:30:00.000Z"
   }
 ]
 ```
@@ -406,11 +537,92 @@ Authorization: Bearer {token}
 }
 ```
 
+### Update Laporan
+
+**Endpoint:** `PUT /api/laporan/{id_laporan}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin
+
+**Request Body:**
+
+```json
+{
+  "id_kategori": "kat-a1b2c3d4",
+  "id_lokasi_klaim": "loc-e5f6g7h8",
+  "lokasi_kejadian": "Lantai 2 dekat tangga",
+  "nama_barang": "Laptop Asus Updated",
+  "jenis_laporan": "hilang",
+  "deskripsi": "Laptop warna hitam dengan stiker logo kampus",
+  "status": "selesai"
+}
+```
+
+**Form Data:**
+
+- `foto` (file, maksimal 3): Foto barang baru
+
+**Response (200):**
+
+```json
+{
+  "message": "Laporan berhasil diupdate",
+  "id_laporan": "lap-a1b2c3d4"
+}
+```
+
+### Delete Laporan
+
+**Endpoint:** `DELETE /api/laporan/{id_laporan}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin
+
+**Response (200):**
+
+```json
+{
+  "message": "Laporan berhasil dihapus"
+}
+```
+
 ---
 
-## Cocok
+## Cocok (Pencocokan)
 
-**Catatan:** Perlu diperhatikan bahwa route `/api/cocok` saat ini memiliki implementasi yang sama dengan `/api/klaim`. Berikut adalah contoh implementasi yang seharusnya:
+### Get All Cocok
+
+**Endpoint:** `GET /api/cocok`
+
+**Response (200):**
+
+```json
+[
+  {
+    "id_laporan_cocok": "cocok-a1b2c3d4",
+    "id_laporan_hilang": "lap-a1b2c3d4",
+    "id_laporan_temuan": "lap-b9c8d7e6",
+    "skor_cocok": 85,
+    "created_at": "2023-06-21T16:30:00.000Z",
+    "created_by": "uid123456"
+  }
+]
+```
+
+### Get Cocok by ID
+
+**Endpoint:** `GET /api/cocok/{id_laporan_cocok}`
+
+**Response (200):**
+
+```json
+{
+  "id_laporan_cocok": "cocok-a1b2c3d4",
+  "id_laporan_hilang": "lap-a1b2c3d4",
+  "id_laporan_temuan": "lap-b9c8d7e6",
+  "skor_cocok": 85,
+  "created_at": "2023-06-21T16:30:00.000Z",
+  "created_by": "uid123456"
+}
+```
 
 ### Create Cocok
 
@@ -436,48 +648,15 @@ Authorization: Bearer {token}
   "id_laporan_hilang": "lap-a1b2c3d4",
   "id_laporan_temuan": "lap-b9c8d7e6",
   "skor_cocok": 85,
+  "created_at": "2023-06-21T16:30:00.000Z",
+  "created_by": "uid123456",
   "message": "Pencocokan berhasil dibuat"
 }
 ```
 
-### Get All Cocok
+### Update Cocok
 
-**Endpoint:** `GET /api/cocok`
-
-**Response (200):**
-
-```json
-[
-  {
-    "id_laporan_cocok": "cocok-a1b2c3d4",
-    "id_laporan_hilang": "lap-a1b2c3d4",
-    "id_laporan_temuan": "lap-b9c8d7e6",
-    "skor_cocok": 85,
-    "created_at": "2023-06-21T16:30:00.000Z"
-  }
-]
-```
-
-### Get Cocok by ID
-
-**Endpoint:** `GET /api/cocok/{id_laporan_cocok}`
-
-**Response (200):**
-
-```json
-{
-  "id_laporan_cocok": "cocok-a1b2c3d4",
-  "id_laporan_hilang": "lap-a1b2c3d4",
-  "id_laporan_temuan": "lap-b9c8d7e6",
-  "skor_cocok": 85,
-  "created_at": "2023-06-21T16:30:00.000Z",
-  "created_by": "uid123456"
-}
-```
-
-### Update Skor Cocok
-
-**Endpoint:** `PATCH /api/cocok/{id_laporan_cocok}/skor`
+**Endpoint:** `PUT /api/cocok/{id_laporan_cocok}`
 
 **Headers:** Memerlukan token autentikasi dengan role admin atau satpam
 
@@ -485,6 +664,8 @@ Authorization: Bearer {token}
 
 ```json
 {
+  "id_laporan_hilang": "lap-a1b2c3d4",
+  "id_laporan_temuan": "lap-b9c8d7e6",
   "skor_cocok": 90
 }
 ```
@@ -493,7 +674,22 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "message": "Skor kecocokan berhasil diupdate"
+  "message": "Data pencocokan berhasil diupdate",
+  "id_laporan_cocok": "cocok-a1b2c3d4"
+}
+```
+
+### Delete Cocok
+
+**Endpoint:** `DELETE /api/cocok/{id_laporan_cocok}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
+
+**Response (200):**
+
+```json
+{
+  "message": "Data pencocokan berhasil dihapus"
 }
 ```
 
