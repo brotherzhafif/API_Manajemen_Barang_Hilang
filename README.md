@@ -89,7 +89,7 @@ Authorization: Bearer {token}
 
 **Endpoint:** `GET /api/users`
 
-**Headers:** Memerlukan token autentikasi
+**Headers:** Memerlukan token autentikasi (semua role dapat mengakses)
 
 **Response (200):**
 
@@ -101,7 +101,8 @@ Authorization: Bearer {token}
     "email": "user@example.com",
     "url_foto_identitas": "https://storage.googleapis.com/...",
     "role": "tamu",
-    "created_at": "2023-06-21T14:30:00.000Z"
+    "created_at": "2023-06-21T14:30:00.000Z",
+    "created_by": "uid987654"
   }
 ]
 ```
@@ -697,11 +698,53 @@ Authorization: Bearer {token}
 
 ## Klaim
 
+### Get All Klaim
+
+**Endpoint:** `GET /api/klaim`
+
+**Headers:** Memerlukan token autentikasi (semua role dapat mengakses)
+
+**Response (200):**
+
+```json
+[
+  {
+    "id_klaim": "klaim-a1b2c3d4",
+    "id_laporan_cocok": "cocok-a1b2c3d4",
+    "id_satpam": "uid123456",
+    "id_penerima": "uid789012",
+    "url_foto_klaim": "https://storage.googleapis.com/...",
+    "waktu_terima": "2023-06-21T16:30:00.000Z",
+    "status": "selesai"
+  }
+]
+```
+
+### Get Klaim by ID
+
+**Endpoint:** `GET /api/klaim/{id_klaim}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
+
+**Response (200):**
+
+```json
+{
+  "id_klaim": "klaim-a1b2c3d4",
+  "id_laporan_cocok": "cocok-a1b2c3d4",
+  "id_satpam": "uid123456",
+  "id_penerima": "uid789012",
+  "url_foto_klaim": "https://storage.googleapis.com/...",
+  "waktu_terima": "2023-06-21T16:30:00.000Z",
+  "status": "selesai"
+}
+```
+
 ### Create Klaim
 
 **Endpoint:** `POST /api/klaim`
 
-**Headers:** Memerlukan token autentikasi dengan role satpam
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
 
 **Request Body:**
 
@@ -714,34 +757,98 @@ Authorization: Bearer {token}
 
 **Form Data:**
 
-- `foto_klaim` (file): Foto bukti serah terima barang
+- `foto_klaim` (file, opsional): Foto bukti serah terima barang
 
 **Response (201):**
 
 ```json
 {
   "id_klaim": "klaim-a1b2c3d4",
-  "message": "Klaim berhasil dibuat"
+  "message": "Klaim berhasil dibuat dan diselesaikan"
 }
 ```
 
-### Verifikasi Klaim
+**Catatan:** Ketika klaim dibuat, sistem otomatis:
 
-**Endpoint:** `PATCH /api/klaim/{id_klaim}/verifikasi`
+- Mengubah status klaim menjadi 'selesai'
+- Mengubah status laporan hilang dan temuan terkait menjadi 'selesai'
 
-**Headers:** Memerlukan token autentikasi dengan role satpam (hanya satpam yang membuat klaim)
+### Update Klaim
+
+**Endpoint:** `PUT /api/klaim/{id_klaim}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
+
+**Request Body:**
+
+```json
+{
+  "id_laporan_cocok": "cocok-a1b2c3d4",
+  "id_penerima": "uid789012",
+  "id_satpam": "uid123456"
+}
+```
+
+**Form Data:**
+
+- `foto_klaim` (file, opsional): Foto bukti serah terima barang baru
 
 **Response (200):**
 
 ```json
 {
-  "message": "Klaim berhasil diverifikasi"
+  "message": "Klaim berhasil diupdate",
+  "id_klaim": "klaim-a1b2c3d4"
+}
+```
+
+### Delete Klaim
+
+**Endpoint:** `DELETE /api/klaim/{id_klaim}`
+
+**Headers:** Memerlukan token autentikasi dengan role admin atau satpam
+
+**Response (200):**
+
+```json
+{
+  "message": "Klaim berhasil dihapus"
 }
 ```
 
 ---
 
+## Role & Permission
+
+### Tamu
+
+- Dapat melakukan registrasi dan login
+- Dapat membuat laporan barang hilang/temuan
+- Dapat melihat profil sendiri
+- Dapat mengupdate status laporan yang dibuat sendiri
+
+### Satpam
+
+- Semua akses seperti Tamu
+- Dapat mengelola kategori (CRUD)
+- Dapat mengelola lokasi (CRUD, kecuali delete)
+- Dapat mengelola pencocokan/cocok (CRUD)
+- Dapat mengelola klaim (CRUD)
+- Dapat melihat semua laporan
+
+### Admin
+
+- Semua akses seperti Satpam
+- Dapat mengelola user (CRUD)
+- Dapat mengelola semua laporan (CRUD)
+- Dapat menghapus lokasi
+- Kontrol penuh terhadap semua data dalam sistem
+
 **Catatan:**
 
 - Semua operasi yang gagal akan mengembalikan kode status yang sesuai (400, 401, 403, 404, 500) dengan pesan error.
-- Route dan implementasi cocok.js perlu diperbaiki karena saat ini menimplementasikan logika yang sama dengan klaim.js.
+- Token autentikasi menggunakan Firebase ID Token yang didapat dari endpoint login.
+- File upload menggunakan Google Cloud Storage dengan URL publik.
+- Sistem otomatis mengubah status laporan saat ada pencocokan atau klaim.
+
+---
