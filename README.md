@@ -31,7 +31,8 @@ Authorization: Bearer {token}
 {
   "email": "user@example.com",
   "password": "password123",
-  "username": "johndoe"
+  "username": "johndoe",
+  "no_hp": "081234567890"
 }
 ```
 
@@ -48,6 +49,7 @@ Authorization: Bearer {token}
     "id": "uid123456",
     "username": "johndoe",
     "email": "user@example.com",
+    "no_hp": "081234567890",
     "role": "tamu"
   }
 }
@@ -99,6 +101,7 @@ Authorization: Bearer {token}
     "id": "uid123456",
     "username": "johndoe",
     "email": "user@example.com",
+    "no_hp": "081234567890",
     "url_foto_identitas": "https://storage.googleapis.com/...",
     "role": "tamu",
     "created_at": "2023-06-21T14:30:00.000Z",
@@ -120,9 +123,46 @@ Authorization: Bearer {token}
   "id": "uid123456",
   "username": "johndoe",
   "email": "user@example.com",
+  "no_hp": "081234567890",
   "url_foto_identitas": "https://storage.googleapis.com/...",
   "role": "tamu",
   "created_at": "2023-06-21T14:30:00.000Z"
+}
+```
+
+### Update User Profile
+
+**Endpoint:** `PUT /api/users/profile`
+
+**Headers:** Memerlukan token autentikasi
+
+**Description:** Endpoint untuk user mengedit profil mereka sendiri (username, no_hp, dan foto_identitas saja).
+
+**Request Body:**
+
+```json
+{
+  "username": "johndoe_updated",
+  "no_hp": "081234567899"
+}
+```
+
+**Form Data:**
+
+- `foto_identitas` (file, opsional): Foto identitas pengguna baru
+
+**Response (200):**
+
+```json
+{
+  "message": "Profil berhasil diupdate",
+  "user": {
+    "id": "uid123456",
+    "username": "johndoe_updated",
+    "no_hp": "081234567899",
+    "email": "user@example.com",
+    "role": "tamu"
+  }
 }
 ```
 
@@ -139,6 +179,7 @@ Authorization: Bearer {token}
   "id": "uid123456",
   "username": "johndoe",
   "email": "user@example.com",
+  "no_hp": "081234567890",
   "url_foto_identitas": "https://storage.googleapis.com/...",
   "role": "tamu",
   "created_at": "2023-06-21T14:30:00.000Z"
@@ -158,6 +199,7 @@ Authorization: Bearer {token}
   "email": "newuser@example.com",
   "password": "password123",
   "username": "newuser",
+  "no_hp": "081234567890",
   "role": "satpam"
 }
 ```
@@ -175,6 +217,7 @@ Authorization: Bearer {token}
     "id": "uid789012",
     "username": "newuser",
     "email": "newuser@example.com",
+    "no_hp": "081234567890",
     "role": "satpam"
   }
 }
@@ -192,6 +235,7 @@ Authorization: Bearer {token}
 {
   "username": "updated_username",
   "email": "updated@example.com",
+  "no_hp": "081234567899",
   "role": "admin"
 }
 ```
@@ -209,6 +253,7 @@ Authorization: Bearer {token}
     "id": "uid123456",
     "username": "updated_username",
     "email": "updated@example.com",
+    "no_hp": "081234567899",
     "role": "admin"
   }
 }
@@ -825,6 +870,7 @@ Authorization: Bearer {token}
 - Dapat melakukan registrasi dan login
 - Dapat membuat laporan barang hilang/temuan
 - Dapat melihat profil sendiri
+- Dapat mengedit profil sendiri (username, no_hp, foto_identitas)
 - Dapat mengupdate status laporan yang dibuat sendiri
 
 ### Satpam

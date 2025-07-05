@@ -27,7 +27,7 @@ router.get('/', verifyToken, async (req, res) => {
 // Create new user (admin only)
 router.post('/', verifyToken, checkRole(['admin']), upload.single('foto_identitas'), async (req, res) => {
     try {
-        const { email, password, username, role } = req.body;
+        const { email, password, username, role, no_hp } = req.body;
 
         if (!email || !password || !username) {
             return res.status(400).json({ error: 'Email, password, dan username wajib diisi' });
@@ -54,6 +54,7 @@ router.post('/', verifyToken, checkRole(['admin']), upload.single('foto_identita
         await db.collection('users').doc(userRecord.uid).set({
             username,
             email,
+            no_hp: no_hp || null,
             url_foto_identitas,
             role: role || 'tamu',
             created_at: new Date(),
@@ -69,6 +70,7 @@ router.post('/', verifyToken, checkRole(['admin']), upload.single('foto_identita
                 id: userRecord.uid,
                 username,
                 email,
+                no_hp: no_hp || null,
                 role: role || 'tamu'
             }
         });
@@ -136,10 +138,63 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 });
 
+// Update user profile (user can edit their own profile)
+router.put('/profile', verifyToken, upload.single('foto_identitas'), async (req, res) => {
+    try {
+        const { username, no_hp } = req.body;
+        const userId = req.user.uid;
+
+        if (!username) {
+            return res.status(400).json({ error: 'Username wajib diisi' });
+        }
+
+        // Check if user exists
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User tidak ditemukan' });
+        }
+
+        // Upload foto identitas baru jika ada
+        let url_foto_identitas = userDoc.data().url_foto_identitas;
+        if (req.file) {
+            url_foto_identitas = await uploadFileToStorage(req.file, 'identitas');
+        }
+
+        // Update data di Firestore
+        const updateData = {
+            username,
+            no_hp: no_hp || null,
+            url_foto_identitas,
+            updated_at: new Date()
+        };
+
+        await db.collection('users').doc(userId).update(updateData);
+
+        // Update Firebase Auth displayName
+        await auth.updateUser(userId, {
+            displayName: username
+        });
+
+        res.json({
+            message: 'Profil berhasil diupdate',
+            user: {
+                id: userId,
+                username,
+                no_hp: no_hp || null,
+                email: userDoc.data().email,
+                role: userDoc.data().role
+            }
+        });
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).json({ error: 'Gagal mengupdate profil' });
+    }
+});
+
 // Update user (admin only)
 router.put('/:id', verifyToken, checkRole(['admin']), upload.single('foto_identitas'), async (req, res) => {
     try {
-        const { username, email, role } = req.body;
+        const { username, email, role, no_hp } = req.body;
         const userId = req.params.id;
 
         if (!username || !email) {
@@ -166,6 +221,7 @@ router.put('/:id', verifyToken, checkRole(['admin']), upload.single('foto_identi
         const updateData = {
             username,
             email,
+            no_hp: no_hp || null,
             url_foto_identitas,
             updated_at: new Date(),
             updated_by: req.user.uid
@@ -195,6 +251,7 @@ router.put('/:id', verifyToken, checkRole(['admin']), upload.single('foto_identi
                 id: userId,
                 username,
                 email,
+                no_hp: no_hp || null,
                 role: role || userDoc.data().role
             }
         });

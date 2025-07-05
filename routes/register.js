@@ -6,10 +6,10 @@ const { upload, uploadFileToStorage } = require('../middleware/upload');
 // Register user
 router.post('/', upload.single('foto_identitas'), async (req, res) => {
     try {
-        const { email, password, username } = req.body;
+        const { email, password, username, no_hp } = req.body;
 
-        if (!email || !password || !username) {
-            return res.status(400).json({ error: 'Email, password, dan username wajib diisi' });
+        if (!email || !password || !username || !no_hp) {
+            return res.status(400).json({ error: 'Email, password, username, dan no_hp wajib diisi' });
         }
 
         // Create user in Firebase Auth
@@ -29,6 +29,7 @@ router.post('/', upload.single('foto_identitas'), async (req, res) => {
         await db.collection('users').doc(userRecord.uid).set({
             username,
             email,
+            no_hp,
             url_foto_identitas,
             role: 'tamu', // Default role
             created_at: new Date()
@@ -43,6 +44,7 @@ router.post('/', upload.single('foto_identitas'), async (req, res) => {
                 id: userRecord.uid,
                 username,
                 email,
+                no_hp,
                 role: 'tamu'
             }
         });

@@ -154,4 +154,116 @@ router.delete('/:id', verifyToken, checkRole(['admin', 'satpam']), async (req, r
     }
 });
 
+// Get available laporan cocok for klaim (yang belum diklaim)
+router.get('/available-cocok', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
+    try {
+        // Get all cocok data
+        const cocokSnapshot = await db.collection('cocok').get();
+        const cocokData = [];
+
+        cocokSnapshot.forEach(doc => {
+            cocokData.push({
+                id_laporan_cocok: doc.id,
+                ...doc.data()
+            });
+        });
+
+        // Get all existing klaim to filter out already claimed cocok
+        const klaimSnapshot = await db.collection('klaim').get();
+        const claimedCocokIds = new Set();
+
+        klaimSnapshot.forEach(doc => {
+            const klaimData = doc.data();
+            if (klaimData.id_laporan_cocok) {
+                claimedCocokIds.add(klaimData.id_laporan_cocok);
+            }
+        });
+
+        // Filter out already claimed cocok
+        const availableCocok = cocokData.filter(cocok => !claimedCocokIds.has(cocok.id_laporan_cocok));
+
+        // Get detailed information for each available cocok
+        const detailedCocok = await Promise.all(
+            availableCocok.map(async (cocok) => {
+                try {
+                    const [laporanHilangDoc, laporanTemuanDoc] = await Promise.all([
+                        db.collection('laporan').doc(cocok.id_laporan_hilang).get(),
+                        db.collection('laporan').doc(cocok.id_laporan_temuan).get()
+                    ]);
+
+                    return {
+                        ...cocok,
+                        laporan_hilang: laporanHilangDoc.exists ? {
+                            id_laporan: laporanHilangDoc.id,
+                            nama_barang: laporanHilangDoc.data().nama_barang,
+                            id_user: laporanHilangDoc.data().id_user
+                        } : null,
+                        laporan_temuan: laporanTemuanDoc.exists ? {
+                            id_laporan: laporanTemuanDoc.id,
+                            nama_barang: laporanTemuanDoc.data().nama_barang,
+                            id_user: laporanTemuanDoc.data().id_user
+                        } : null
+                    };
+                } catch (error) {
+                    console.error('Error fetching laporan details:', error);
+                    return cocok;
+                }
+            })
+        );
+
+        res.json(detailedCocok);
+    } catch (error) {
+        console.error('Error getting available cocok:', error);
+        res.status(500).json({ error: 'Gagal mengambil data pencocokan yang tersedia' });
+    }
+});
+
+// Get available penerima (users who can receive items)
+router.get('/available-penerima', verifyToken, checkRole(['admin', 'satpam']), async (req, res) => {
+    try {
+        const { id_laporan_cocok } = req.query;
+
+        if (!id_laporan_cocok) {
+            return res.status(400).json({ error: 'id_laporan_cocok diperlukan untuk menentukan penerima' });
+        }
+
+        // Get cocok data to find the laporan hilang
+        const cocokDoc = await db.collection('cocok').doc(id_laporan_cocok).get();
+        if (!cocokDoc.exists) {
+            return res.status(404).json({ error: 'Data pencocokan tidak ditemukan' });
+        }
+
+        const cocokData = cocokDoc.data();
+
+        // Get laporan hilang to find the owner
+        const laporanHilangDoc = await db.collection('laporan').doc(cocokData.id_laporan_hilang).get();
+        if (!laporanHilangDoc.exists) {
+            return res.status(404).json({ error: 'Laporan hilang tidak ditemukan' });
+        }
+
+        const laporanHilangData = laporanHilangDoc.data();
+
+        // Get user details (the owner of the lost item)
+        const userDoc = await db.collection('users').doc(laporanHilangData.id_user).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'Data user tidak ditemukan' });
+        }
+
+        const userData = userDoc.data();
+
+        res.json({
+            id_penerima: laporanHilangData.id_user,
+            username: userData.username,
+            email: userData.email,
+            no_hp: userData.no_hp,
+            nama_barang: laporanHilangData.nama_barang,
+            id_laporan_hilang: cocokData.id_laporan_hilang,
+            id_laporan_temuan: cocokData.id_laporan_temuan
+        });
+    } catch (error) {
+        console.error('Error getting available penerima:', error);
+        res.status(500).json({ error: 'Gagal mengambil data penerima' });
+    }
+});
+
 module.exports = router;
