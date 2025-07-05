@@ -118,7 +118,7 @@ router.get('/profile', verifyToken, async (req, res) => {
 });
 
 // Get specific user by ID (admin only)
-router.get('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
     try {
         const userDoc = await db.collection('users').doc(req.params.id).get();
 
